@@ -206,7 +206,9 @@ def find_photos(rows, sort=None, order=None, limit=None):
     return F.out("is.workflow.actions.filter.photos", "Photos", **p)
 
 
-BEGINS_WITH = 8
+# iOS drops the text of a legacy "begins with" (8) condition on import ("Please choose a value for each
+# parameter"), while "contains" (99) keeps it. Key prefixes are distinctive, so "contains" does the same job.
+BEGINS_WITH = CONTAINS
 
 
 def set_tok(name, t):
