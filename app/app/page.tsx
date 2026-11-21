@@ -6,8 +6,8 @@ import config from "@/studio.config";
 
 const STEPS = [
   { t: "Download it", d: "Tap the button on your iPhone, in Safari. The file lands in Downloads." },
-  { t: "Add it", d: "Open the file. Shortcuts shows every step it runs: scroll to the bottom and tap Add Shortcut. Leave the key as none." },
-  { t: "Run it", d: "Open Shortcuts and tap Camera Roll Detox. It asks what to clean, shows you what it found, then asks before deleting." },
+  { t: "Add it", d: "Open the file. Shortcuts shows every step it runs: scroll to the bottom and tap Add Shortcut. No setup questions." },
+  { t: "Run it", d: "Open Shortcuts and tap Camera Roll Detox. It asks what to clean and which AI to use (pick a key, then paste it once), shows you what it found, then asks before deleting." },
 ];
 
 export default function DownloadPage() {

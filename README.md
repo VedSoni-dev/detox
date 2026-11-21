@@ -30,7 +30,7 @@ An Apple Shortcut for iPhone, and the small site that hands it out. A free, open
 |---|---|---|
 | **Apple Intelligence** | Free, built into the phone | iPhone 15 Pro or newer |
 | **Sign in with publik** | One tap inside the shortcut; your phone gets its own key | any iPhone |
-| **Your own key** | Paste an OpenRouter, Gemini, Anthropic, OpenAI or publik key; the prefix picks the provider | any iPhone |
+| **Your own key** | Pick Gemini, Claude, OpenAI or OpenRouter from the menu, then paste that key once (saved on the phone) | any iPhone |
 | **No AI** | Skip it; screenshots and long videos still get cleaned | any iPhone |
 
 With Apple Intelligence nothing leaves Apple. With publik or a key, a 512px JPEG of each checked photo goes to that

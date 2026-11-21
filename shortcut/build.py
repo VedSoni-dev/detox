@@ -6,6 +6,7 @@
 Action identifiers and parameter keys were read from this Mac's own Shortcuts action database
 (~/Library/Shortcuts/ToolKit) and Apple's gallery shortcuts, not guessed from blog posts.
 """
+import re
 import os, plistlib, subprocess, sys, uuid
 
 OBJ = "\ufffc"  # the placeholder character Shortcuts puts where a variable sits inside text
@@ -27,15 +28,20 @@ PARSE_PROMPT = (
     '"Everything" = 30, 5, 150. Anything not mentioned = null.\n'
     "Request: "
 )
-# One key field takes any of five providers; the prefix says which. (prefix, style, url, auth header, auth prefix, model)
-# Models must see images. Claude: the studio default, thinking always on, so low effort + room for the answer.
+# The person picks a provider from a menu, then pastes that provider's key. (menu name, style, url, auth header,
+# auth prefix, model, where to get a key). Models must see images. Claude: the studio default, low effort.
 PROVIDERS = [
-    ("sk-ant-", "anthropic", "https://api.anthropic.com/v1/messages", "x-api-key", "", "claude-opus-5-5"),
-    ("sk-or-", "openai", "https://openrouter.ai/api/v1/chat/completions", "Authorization", "Bearer ", "openrouter/auto"),
-    ("AIza", "gemini", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-     "x-goog-api-key", "", "gemini-2.5-flash"),
-    ("sk-", "openai", "https://api.openai.com/v1/chat/completions", "Authorization", "Bearer ", "gpt-4.1-mini"),
-    ("", "openai", "https://publikhq.com/api/v1/chat/completions", "Authorization", "Bearer ", "publik-balanced"),  # publik pk_ keys
+    ("Gemini key (free tier)", "gemini",
+     "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+     "x-goog-api-key", "", "gemini-2.5-flash", "Get one free at aistudio.google.com/apikey"),
+    ("Claude key", "anthropic", "https://api.anthropic.com/v1/messages", "x-api-key", "", "claude-opus-5-5",
+     "Get one at console.anthropic.com"),
+    ("OpenAI key", "openai", "https://api.openai.com/v1/chat/completions", "Authorization", "Bearer ", "gpt-4.1-mini",
+     "Get one at platform.openai.com/api-keys"),
+    ("OpenRouter key", "openai", "https://openrouter.ai/api/v1/chat/completions", "Authorization", "Bearer ",
+     "openrouter/auto", "Get one at openrouter.ai/keys"),
+    ("publik", "openai", "https://publikhq.com/api/v1/chat/completions", "Authorization", "Bearer ",
+     "publik-balanced", "Paste a pk_ key from publikhq.com"),
 ]
 # Sign in with publik, the kit's flow done from the shortcut: POST /api/v1/installs with the builds hub's public
 # app token (pat_, public by design) gives this phone its own pk_ key + a claim (sign-in) link. Hub listing only,
@@ -45,7 +51,8 @@ _KIT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 HUB_SLUG = __import__("json").load(open(os.path.join(_KIT, "hub.json")))["publikSlug"]
 APP_TOKEN = open(os.path.join(_KIT, "publik-app-token.txt")).read().strip()
 assert APP_TOKEN.startswith("pat_"), "kit/publik-app-token.txt must hold the hub's pat_ token"
-KEY_FILE = "camera-roll-detox/publik-key.txt"  # in the Shortcuts folder, so later runs skip sign-in
+KEY_FILE = "camera-roll-detox/ai-key.txt"  # in the Shortcuts folder, so later runs skip the setup
+PROVIDER_FILE = "camera-roll-detox/ai-provider.txt"
 APPLE_MODEL = "Apple Intelligence"  # the value Apple's own gallery shortcuts use (Private Cloud Compute)
 
 
@@ -109,7 +116,21 @@ MENU = "is.workflow.actions.choosefrommenu"
 IS, CONTAINS, GREATER, HAS_VALUE = 4, 99, 2, 100
 
 
+BEGINS_WITH = "begins"
+TEXT_RULES = {IS: "^%s$", CONTAINS: "%s", "begins": "^%s"}
+
+
 def if_(ref, cond, string=None, number=None):
+    """Text checks (is / contains / begins with) go through Match Text, then If <matches> has any value.
+    iOS empties the text box of a text If on import ("Please choose a value for each parameter"); a regex in
+    Match Text survives, and "has any value" takes no parameter at all."""
+    if cond == IS and number is not None:
+        string, number = str(number), None
+    if string is not None and cond in TEXT_RULES:
+        pattern = TEXT_RULES[cond] % re.sub(r"([.^$*+?()\[\]{}|\\])", r"\\\1", string)
+        ref = F.out("is.workflow.actions.text.match", "Matches", WFMatchTextPattern=pattern,
+                    text=tok(ref), WFMatchTextCaseSensitive=False)
+        cond, string = HAS_VALUE, None
     g = new_group()
     p = dict(GroupingIdentifier=g, WFControlFlowMode=0, WFCondition=cond,
              WFInput={"Type": "Variable", "Variable": att(ref)})
@@ -206,26 +227,37 @@ def find_photos(rows, sort=None, order=None, limit=None):
     return F.out("is.workflow.actions.filter.photos", "Photos", **p)
 
 
-# iOS drops the text of a legacy "begins with" (8) condition on import ("Please choose a value for each
-# parameter"), while "contains" (99) keeps it. Key prefixes are distinctive, so "contains" does the same job.
-BEGINS_WITH = CONTAINS
 
 
 def set_tok(name, t):
     set_var(name, F.out("is.workflow.actions.gettext", "Text", WFTextActionText=t))
 
 
-def detect_provider():
-    """From AIKey's prefix, set Style / URL / AuthName / AuthValue / Model. Emitted as an If / Otherwise chain."""
+def save_text(path, ref):
+    F.add("is.workflow.actions.documentpicker.save", WFInput=att(ref), WFAskWhereToSave=False,
+          WFFileDestinationPath=path, WFSaveFileOverwrite=True)
+
+
+def remember(provider, key_ref):
+    """AIKey + Provider for this run, and saved so later runs skip the setup."""
+    set_var("AIKey", key_ref)
+    p = F.out("is.workflow.actions.gettext", "Text", WFTextActionText=provider)
+    set_var("Provider", p)
+    save_text(KEY_FILE, key_ref)
+    save_text(PROVIDER_FILE, p)
+
+
+def apply_provider():
+    """From Provider, set Style / URL / AuthName / AuthValue / Model. publik is the last Otherwise."""
     groups = []
-    for prefix, style, url, auth_name, auth_pre, model in PROVIDERS:
-        if prefix:
-            g = if_(V("AIKey"), BEGINS_WITH, prefix)
-            groups.append(g)
+    for name, style, url, auth_name, auth_pre, model, _ in PROVIDERS:
+        last = name == PROVIDERS[-1][0]
+        if not last:
+            groups.append(if_(V("Provider"), IS, name))
         set_text("Style", style); set_text("URL", url); set_text("AuthName", auth_name)
         set_tok("AuthValue", tok(auth_pre, V("AIKey"))); set_text("Model", model)
-        if prefix:
-            else_(g)
+        if not last:
+            else_(groups[-1])
     for g in reversed(groups):
         end_if(g)
 
@@ -275,13 +307,18 @@ def dict_value(ref, key):
                  WFGetDictionaryValueType="Value", WFDictionaryKey=key)
 
 
-def load_saved_key():
-    """If an earlier run signed in with publik, AIKey = that key."""
-    f = F.out("is.workflow.actions.documentpicker.open", "File", WFGetFilePath=KEY_FILE,
+def read_text(path):
+    f = F.out("is.workflow.actions.documentpicker.open", "File", WFGetFilePath=path,
               WFFileErrorIfNotFound=False, WFShowFilePicker=False)
-    txt = F.out("is.workflow.actions.detect.text", "Text", WFInput=att(f))
-    g = if_(txt, BEGINS_WITH, "pk_")
-    set_var("AIKey", txt)
+    return F.out("is.workflow.actions.detect.text", "Text", WFInput=att(f))
+
+
+def load_saved_key():
+    """A key set up on an earlier run: AIKey + Provider."""
+    key = read_text(KEY_FILE)
+    g = if_(key, HAS_VALUE)
+    set_var("AIKey", key)
+    set_var("Provider", read_text(PROVIDER_FILE))
     end_if(g)
 
 
@@ -295,9 +332,7 @@ def publik_sign_in():
         '"install_id":"' % (APP_TOKEN, HUB_SLUG), *install_id, '","disclosure_version":1,"dialects":["chat_completions"]}'))
     key = dict_value(res, "key")
     g = if_(key, BEGINS_WITH, "pk_")
-    set_var("AIKey", key)
-    F.add("is.workflow.actions.documentpicker.save", WFInput=att(key), WFAskWhereToSave=False,
-          WFFileDestinationPath=KEY_FILE, WFSaveFileOverwrite=True)
+    remember("publik", key)
     claim = dict_value(res, "claim_url")
     h = if_(claim, HAS_VALUE)
     alert("Sign in with publik", "Safari will open publik. Sign in there, then come back here and tap OK.")
@@ -347,17 +382,8 @@ def build(dry_run=False):
     global F
     F = Flow()
 
-    # --- setup. Action 0 must stay the key Text action: the import question points at it.
-    # The setup sheet won't take an empty answer, so it comes prefilled with "none" = use Apple's AI.
-    key_text = F.out("is.workflow.actions.gettext", "Text", WFTextActionText="none")
-    g = if_(key_text, IS, "none")
-    else_(g)
-    set_var("AIKey", key_text)
-    end_if(g)
-    g = if_(V("AIKey"), HAS_VALUE)
-    else_(g)
+    # --- setup: a key from an earlier run, if there is one (no question at import: iOS mangles those)
     load_saved_key()
-    end_if(g)
     for n in ("ShotCount", "VidCount", "JunkCount"):
         set_num(n, 0)
 
@@ -375,21 +401,24 @@ def build(dry_run=False):
     g = if_(V("NeedAI"), HAS_VALUE)
     k = if_(V("AIKey"), HAS_VALUE)
     else_(k)
-    m = menu("How should the AI run? Apple Intelligence needs an iPhone 15 Pro or newer.",
-             ["Apple Intelligence", "Sign in with publik", "Paste an AI key", "Skip the AI"])
-    case(m, "Apple Intelligence")
-    case(m, "Sign in with publik")
+    m = menu("Which AI should check your photos?",
+             ["Apple Intelligence (iPhone 15 Pro or newer)", "Sign in with publik (free)"]
+             + [p[0] for p in PROVIDERS[:-1]] + ["Skip the AI"])
+    case(m, "Apple Intelligence (iPhone 15 Pro or newer)")
+    case(m, "Sign in with publik (free)")
     publik_sign_in()
-    case(m, "Paste an AI key")
-    set_var("AIKey", F.out("is.workflow.actions.ask", "Provided Input",
-                           WFAskActionPrompt="Paste your key: publik, OpenRouter, Gemini, Anthropic or OpenAI"))
+    for name, *_, where in PROVIDERS[:-1]:
+        case(m, name)
+        pasted = F.out("is.workflow.actions.ask", "Provided Input",
+                       WFAskActionPrompt="Paste your %s. %s. It's saved on this iPhone only." % (name.replace(" (free tier)", ""), where))
+        remember(name, pasted)
     case(m, "Skip the AI")
     set_text("SkipAI", "yes")
     end_menu(m)
     end_if(k)
     end_if(g)
     g = if_(V("AIKey"), HAS_VALUE)
-    detect_provider()  # the only copy: Style / URL / auth / model for whichever key we ended up with
+    apply_provider()  # the only copy: Style / URL / auth / model for whichever key we ended up with
     end_if(g)
 
     g = if_(V("Picked"), CONTAINS, "Old screenshots")
@@ -554,11 +583,7 @@ def build(dry_run=False):
         "WFWorkflowHasOutputFallback": False,
         "WFWorkflowHasShortcutInputVariables": False,
         "WFWorkflowIcon": {"WFWorkflowIconGlyphNumber": 59511, "WFWorkflowIconStartColor": 4282601983},
-        "WFWorkflowImportQuestions": [{
-            "ActionIndex": 0, "Category": "Parameter", "ParameterKey": "WFTextActionText", "DefaultValue": "none",
-            "Text": "Got an AI key (publik, OpenRouter, Gemini, Anthropic or OpenAI)? Paste it for the AI photo check. "
-                    "Leave it as \"none\" to use your iPhone's free built-in AI.",
-        }],
+        "WFWorkflowImportQuestions": [],
         "WFWorkflowInputContentItemClasses": [],
         "WFWorkflowOutputContentItemClasses": [],
         "WFWorkflowTypes": [],

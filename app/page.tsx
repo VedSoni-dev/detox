@@ -15,7 +15,7 @@ const ASKS = [
 const AI = [
   { t: "Apple Intelligence", d: "Free, on your iPhone 15 Pro or newer." },
   { t: "Sign in with publik", d: "One tap from inside the shortcut. Works on any iPhone." },
-  { t: "Your own key", d: "Paste an OpenRouter, Gemini, Anthropic, OpenAI or publik key. It picks the right one." },
+  { t: "Your own key", d: "Pick Gemini, Claude, OpenAI or OpenRouter, then paste your key once. It stays on your iPhone." },
   { t: "No AI", d: "Skip it. Screenshots and long videos still get cleaned." },
 ];
 
