@@ -509,6 +509,11 @@ def build(dry_run=False):
     g = if_(V("AICount"), HAS_VALUE)
     recent = find_photos([f_enum("Media Type", "Image"), f_bool("Is a Screenshot", False), f_bool("Is Favorite", False)],
                          sort="Date Taken", order="Latest First", limit=V("AICount"))
+    z = if_(count(recent), IS, number=0)
+    alert("Can't see your photos", "Shortcuts doesn't have access to your photos. Open Settings > Privacy & Security > "
+          "Photos > Shortcuts, pick Full Access, then run Camera Roll Detox again.")
+    stop()
+    end_if(z)
     rg = new_group()
     F.add("is.workflow.actions.repeat.each", GroupingIdentifier=rg, WFControlFlowMode=0, WFInput=att(recent))
     small = F.out("is.workflow.actions.image.resize", "Resized Image", WFImage=att(REPEAT_ITEM),
