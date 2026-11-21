@@ -307,6 +307,34 @@ def dict_value(ref, key):
                  WFGetDictionaryValueType="Value", WFDictionaryKey=key)
 
 
+PHOTOS_SETTINGS = "App-Prefs:Privacy&path=PHOTOS"
+FIX_ACCESS = ("Settings > Privacy & Security > Photos > Shortcuts > Full Access. "
+              "(\"Limited\" only lets it see the few photos you picked.)")
+
+
+def photo_access_check():
+    """No photos visible = Shortcuts has no Photos access. Say how to fix it, offer to open Settings, stop."""
+    any_photo = find_photos([], limit=1)
+    z = if_(count(any_photo), IS, number=0)
+    m = menu("Camera Roll Detox can't see your photos. Turn on: " + FIX_ACCESS, ["Open Settings", "OK"])
+    case(m, "Open Settings")
+    F.add("is.workflow.actions.openurl", WFInput=tok(PHOTOS_SETTINGS))
+    case(m, "OK")
+    end_menu(m)
+    stop()
+    end_if(z)
+
+
+def forget_key():
+    for path in (KEY_FILE, PROVIDER_FILE):
+        f = F.out("is.workflow.actions.documentpicker.open", "File", WFGetFilePath=path,
+                  WFFileErrorIfNotFound=False, WFShowFilePicker=False)
+        h = if_(f, HAS_VALUE)
+        F.add("is.workflow.actions.file.delete", WFInput=att(f), WFDeleteImmediatelyDelete=True,
+              WFDeleteFileConfirmDeletion=False)
+        end_if(h)
+
+
 def read_text(path):
     f = F.out("is.workflow.actions.documentpicker.open", "File", WFGetFilePath=path,
               WFFileErrorIfNotFound=False, WFShowFilePicker=False)
@@ -383,6 +411,7 @@ def build(dry_run=False):
     F = Flow()
 
     # --- setup: a key from an earlier run, if there is one (no question at import: iOS mangles those)
+    photo_access_check()
     load_saved_key()
     for n in ("ShotCount", "VidCount", "JunkCount"):
         set_num(n, 0)
@@ -509,11 +538,6 @@ def build(dry_run=False):
     g = if_(V("AICount"), HAS_VALUE)
     recent = find_photos([f_enum("Media Type", "Image"), f_bool("Is a Screenshot", False), f_bool("Is Favorite", False)],
                          sort="Date Taken", order="Latest First", limit=V("AICount"))
-    z = if_(count(recent), IS, number=0)
-    alert("Can't see your photos", "Shortcuts doesn't have access to your photos. Open Settings > Privacy & Security > "
-          "Photos > Shortcuts, pick Full Access, then run Camera Roll Detox again.")
-    stop()
-    end_if(z)
     rg = new_group()
     F.add("is.workflow.actions.repeat.each", GroupingIdentifier=rg, WFControlFlowMode=0, WFInput=att(recent))
     small = F.out("is.workflow.actions.image.resize", "Resized Image", WFImage=att(REPEAT_ITEM),
@@ -535,6 +559,13 @@ def build(dry_run=False):
                       '{"type":"text","text":"' + P + '"},{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,',
                       b64, '"}}]}]}'),
     }))
+    # an error reply never says JUNK, so the photo is kept; remember the first one to show at the end
+    e = if_(V("Verdict"), CONTAINS, '"error"')
+    add_to_var("AIErrors", V("Verdict"))
+    end_if(e)
+    gem = if_(V("Style"), IS, "gemini")
+    F.add("is.workflow.actions.delay", WFDelayTime=6)  # Gemini's free tier allows about 10 requests a minute
+    end_if(gem)
     else_(k)
     set_var("Verdict", use_model(tok(JUNK_PROMPT, "\n", jpg)))
     end_if(k)
@@ -542,6 +573,20 @@ def build(dry_run=False):
     add_to_var("Junk", REPEAT_ITEM)  # the original photo, so Delete Photos can find it
     end_if(j)
     F.add("is.workflow.actions.repeat.each", GroupingIdentifier=rg, WFControlFlowMode=2, UUID=str(uuid.uuid4()).upper())
+    e = if_(V("AIErrors"), HAS_VALUE)
+    first = F.out("is.workflow.actions.getitemfromlist", "Item from List", WFInput=att(V("AIErrors")),
+                  WFItemSpecifier="First Item")
+    bad = F.out("is.workflow.actions.text.match", "Matches", text=tok(first), WFMatchTextCaseSensitive=False,
+                WFMatchTextPattern="api.?key|unauthori|authenticat|invalid|permission|401|403")
+    b = if_(bad, HAS_VALUE)
+    forget_key()
+    alert("Your AI key didn't work", "The AI said the key is wrong, so it's cleared. Run Camera Roll Detox again "
+          "and pick your AI again. Photos it couldn't check were kept.")
+    else_(b)
+    alert("The AI skipped some photos", "Some photos couldn't be checked (often the free tier's speed limit), so they "
+          "were kept. Run it again later for the rest.")
+    end_if(b)
+    end_if(e)
     h = if_(V("Junk"), HAS_VALUE)
     add_to_var("ToDelete", V("Junk"))
     set_var("JunkCount", count(V("Junk")))

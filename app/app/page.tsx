@@ -7,7 +7,8 @@ import config from "@/studio.config";
 const STEPS = [
   { t: "Download it", d: "Tap the button on your iPhone, in Safari. The file lands in Downloads." },
   { t: "Add it", d: "Open the file. Shortcuts shows every step it runs: scroll to the bottom and tap Add Shortcut. No setup questions." },
-  { t: "Run it", d: "Open Shortcuts and tap Camera Roll Detox. It asks what to clean and which AI to use (pick a key, then paste it once), shows you what it found, then asks before deleting." },
+  { t: "Give it Full Access", d: "On the first run, tap Allow Full Access when it asks for Photos. Already said no or Limited? Settings > Privacy & Security > Photos > Shortcuts > Full Access. With Limited it only sees the few photos you picked." },
+  { t: "Run it", d: "Open Shortcuts and tap Camera Roll Detox. It asks what to clean and which AI to use (pick one, paste your key once). When it asks to send photos to the AI, tap Always Allow. Keep the screen on while the AI checks." },
 ];
 
 export default function DownloadPage() {
