@@ -6,7 +6,7 @@
 
 **Clean your iPhone camera roll with AI in one tap, free**
 
-[**Live app →**](https://detox.vedantsoni.com) &nbsp;·&nbsp; [Watch the demo](docs/media/demo.mp4) &nbsp;·&nbsp; [Report a bug](https://github.com/VedSoni-dev/detox/issues)
+[**Get it →**](https://detox.vedantsoni.com) &nbsp;·&nbsp; [Watch the demo](docs/media/demo.mp4) &nbsp;·&nbsp; [Report a bug](https://github.com/VedSoni-dev/detox/issues)
 
 [![MIT license](https://img.shields.io/badge/license-MIT-black.svg)](LICENSE)
 [![Live](https://img.shields.io/badge/live-detox.vedantsoni.com-black.svg)](https://detox.vedantsoni.com)
@@ -14,61 +14,78 @@
 
 </div>
 
-<img src="docs/media/demo.gif" alt="Camera Roll Detox in action" width="100%" />
+An Apple Shortcut for iPhone, and the small site that hands it out. A free, open-source alternative to Cleanup
+(not affiliated): no app to install, no subscription.
 
 ## What it does
 
-<!-- WHAT_IT_DOES: 3–5 bullets, each a thing a person can do, in plain words. No feature-speak. -->
+- Asks what's eating your storage: old screenshots, long videos, blurry and junk photos, everything, or just tell it in your own words.
+- Finds screenshots older than the age you pick and the videos longer than the length you pick. Favorites are skipped; you pick which long videos go.
+- Has AI look at your recent photos and flag the blurry, accidental and one-time ones (pocket shots, receipts, parking spots). If it's unsure, it keeps the photo.
+- Shows what it found ("Found 412 screenshots, 9 videos, 63 junk photos. Delete 484?"), lets you untick anything, then deletes it all with one iOS confirmation. Everything stays in Recently Deleted for 30 days.
 
-## Bring your own AI
+## Pick the AI
 
-No account with us. Pick what powers it, and switch any time:
-
-| Mode | How | Works on |
+| Option | How | Works on |
 |---|---|---|
-| **publik** | Sign in with publik and use your publik plan. No key. | web + your computer |
+| **Apple Intelligence** | Free, built into the phone | iPhone 15 Pro or newer |
+| **Sign in with publik** | One tap inside the shortcut; your phone gets its own key | any iPhone |
+| **Your own key** | Paste an OpenRouter, Gemini, Anthropic, OpenAI or publik key; the prefix picks the provider | any iPhone |
+| **No AI** | Skip it; screenshots and long videos still get cleaned | any iPhone |
 
-## Run it yourself
+With Apple Intelligence nothing leaves Apple. With publik or a key, a 512px JPEG of each checked photo goes to that
+service only. Screenshots and videos are found on the phone with no AI.
+
+## Get it
+
+Open [detox.vedantsoni.com](https://detox.vedantsoni.com) on your iPhone, sign in with publik, tap **Download the
+shortcut**, open the file and tap **Add Shortcut** at the bottom.
+
+## Build it yourself
+
+The shortcut is generated, not hand-made. On a Mac signed in to iCloud:
 
 ```bash
 git clone https://github.com/VedSoni-dev/detox.git
-cd detox
-npm install
-npm run dev
+cd detox/shortcut
+python3 build.py              # dist/Camera Roll Detox.shortcut + a dry-run copy that never deletes
+python3 build.py --anyone     # signed so anyone can open it (needs free iCloud space)
 ```
 
-Open http://localhost:3000. Requires Node 20.9 or newer. Nothing to configure: choose a mode in the app.
+The site: `npm install && npm run dev`, then open http://localhost:3000. Node 20.9 or newer.
 
 ## Screenshots
 
 <table>
   <tr>
-    <td><img src="docs/media/screen-1.png" alt="" /></td>
-    <td><img src="docs/media/screen-2.png" alt="" /></td>
+    <td><img src="docs/media/screen-1.png" alt="Landing page" /></td>
+    <td><img src="docs/media/screen-2.png" alt="Sign in with publik" /></td>
   </tr>
   <tr>
-    <td><img src="docs/media/screen-3.png" alt="" /></td>
-    <td><img src="docs/media/screen-4.png" alt="" /></td>
+    <td><img src="docs/media/screen-3.png" alt="How it works" /></td>
+    <td><img src="docs/media/screen-4.png" alt="Download page" /></td>
   </tr>
 </table>
 
 ## How it works
 
-<!-- HOW_IT_WORKS: 1 short paragraph + the main files. -->
+`shortcut/build.py` writes the shortcut as a plist (action IDs and parameter keys read from macOS's own Shortcuts
+action database) and signs it with `shortcuts sign`. Find Photos does the screenshot and video searches; the AI check
+resizes each photo and asks the chosen model for one word, JUNK or KEEP. The site is a Next.js app: the landing is
+open, the download sits behind Sign in with publik through the builds hub, checked again on the server.
 
 | Path | What |
 |---|---|
+| `shortcut/build.py` | Generates and signs the shortcut |
 | `app/page.tsx` | The landing page |
-| `app/app/` | The app |
-| `app/api/ai/route.ts` | The AI call (prompts live here) |
-| `kit/` | Shared studio kit: the four AI modes, the mode picker, theme and motion tokens |
-| `studio.config.ts` | Name, links and which AI modes this app offers |
+| `app/app/` + `components/Gate.tsx` | Sign in with publik, then the download page |
+| `app/api/download/route.ts` | Serves the file to signed-in browsers only |
+| `kit/` | Shared studio kit (publik sign-in, theme, motion) |
 
-**Privacy.** Your Claude key is kept in an encrypted, http-only cookie on your browser and sent only to Anthropic. ChatGPT sign-in tokens stay on your computer in `~/.config/detox/` (owner-only). Local models never leave your machine. The app sends an anonymous usage count to [Vedant's builds hub](https://builds.vedantsoni.com) (this app's name, which AI mode answered, a random id per browser; no content, no IP, no account), and never for browsers with Do Not Track or Global Privacy Control.
-
-## Contributing
-
-Issues and pull requests are welcome. For a bigger change, open an issue first so we can talk about it.
+**Privacy.** The site keeps your publik sign-in in an encrypted, http-only cookie and sends an anonymous usage count to
+[Vedant's builds hub](https://builds.vedantsoni.com) (this app's name, a random id per browser; no content, no IP, no
+account), never for browsers with Do Not Track or Global Privacy Control. The shortcut saves a publik key, if you sign
+in, to its own file in your Shortcuts folder.
 
 ## License
 

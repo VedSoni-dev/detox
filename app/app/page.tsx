@@ -1,63 +1,42 @@
-"use client";
-// The app at "/app". Starter: a streaming chat over the kit. Replace the body with the build; keep the header
-// (name left, mode pill right: Jakob's law) and <ModeGate> (nobody hits a dead AI call without a mode).
+// The download page at "/app", behind Sign in with publik (app/app/layout.tsx). The file comes from /api/download,
+// which checks the same sign-in on the server.
 import Link from "next/link";
-import { useRef, useState } from "react";
-import { ModeButton, ModeGate } from "@/kit/react/ModePanel";
-import { useAI } from "@/kit/react/studio";
-import type { ChatMessage } from "@/kit/ai/types";
+import { Logo } from "@/components/Logo";
+import config from "@/studio.config";
 
-export default function AppPage() {
+const STEPS = [
+  { t: "Download it", d: "Tap the button on your iPhone, in Safari. The file lands in Downloads." },
+  { t: "Add it", d: "Open the file. Shortcuts shows every step it runs: scroll to the bottom and tap Add Shortcut. Leave the key as none." },
+  { t: "Run it", d: "Open Shortcuts and tap Camera Roll Detox. It asks what to clean, shows you what it found, then asks before deleting." },
+];
+
+export default function DownloadPage() {
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="flex items-center justify-between border-b border-line px-4 py-2 sm:px-6">
-        <Link href="/" className="flex min-h-11 items-center font-display font-semibold">Camera Roll Detox</Link>
-        <ModeButton />
+    <div className="min-h-dvh bg-bg">
+      <header className="border-b border-line">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-2 sm:px-6">
+          <Link href="/" className="flex min-h-11 items-center gap-2 font-display text-lg font-semibold tracking-tight"><Logo />{config.app.name}</Link>
+          <a href={config.app.repo} target="_blank" rel="noopener noreferrer" className="flex min-h-11 items-center text-sm text-muted transition-colors duration-150 hover:text-fg">Open source</a>
+        </div>
       </header>
-      <main className="flex flex-1 flex-col">
-        <ModeGate><Chat /></ModeGate>
+      <main className="mx-auto max-w-xl px-4 pb-24 pt-14 sm:px-6 sm:pt-20">
+        <section className="sk-stagger">
+          <p className="font-mono text-xs uppercase tracking-widest text-muted">You&rsquo;re in</p>
+          <h1 className="mt-3 text-4xl leading-[1.05] sm:text-5xl">Get Camera Roll Detox</h1>
+          <p className="mt-5 text-lg leading-relaxed text-muted">An Apple Shortcut for iPhone. Free, no app to install.</p>
+          <a href="/api/download" className="sk-btn mt-8 inline-flex !min-h-12 items-center" download>Download the shortcut</a>
+          <p className="mt-3 text-sm text-muted">On a computer? Open {config.app.url.replace("https://", "")}/app on your iPhone instead.</p>
+        </section>
+        <ol className="mt-12 grid gap-3">
+          {STEPS.map((s, i) => (
+            <li key={s.t} className="flex gap-4 rounded-[var(--radius)] border border-line bg-card p-5 shadow-[var(--shadow-1)]" style={{ animation: `sk-rise var(--dur-3) var(--spring) ${160 + i * 60}ms both` }}>
+              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-fg font-mono text-sm text-bg">{i + 1}</span>
+              <span><span className="block font-semibold">{s.t}</span><span className="mt-1 block text-sm text-muted">{s.d}</span></span>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-10 text-sm text-muted">Anything it deletes sits in Recently Deleted for 30 days. Favorites are never touched.</p>
       </main>
-    </div>
-  );
-}
-
-function Chat() {
-  const ai = useAI();
-  const [history, setHistory] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  async function send() {
-    const text = input.trim(); // Postel: accept messy input, send it clean
-    if (!text || ai.busy) return;
-    const next: ChatMessage[] = [...history, { role: "user", content: text }];
-    setHistory(next);
-    setInput("");
-    const answer = await ai.run({ messages: next });
-    if (answer) setHistory([...next, { role: "assistant", content: answer }]);
-    inputRef.current?.focus();
-  }
-
-  const shown = ai.busy ? [...history, { role: "assistant" as const, content: ai.text }] : history;
-  return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 sm:px-6">
-      <div className="flex-1 space-y-4 py-6">
-        {shown.length === 0 && <p className="text-muted">Ask anything to try it.</p>}
-        {shown.map((m, i) => (
-          <div key={i} className={`sk-rise max-w-[85%] whitespace-pre-wrap rounded-[var(--radius)] px-4 py-3 ${m.role === "user" ? "ml-auto bg-fg text-bg" : "border border-line bg-card"}`}>
-            {m.content || <span className="text-muted">Thinking…</span>}
-          </div>
-        ))}
-        {ai.error && (
-          <p className="sk-error" role="alert">{ai.error.message}{ai.error.action && <> <a href={ai.error.action.url} target="_blank" rel="noopener noreferrer">{ai.error.action.label} ↗</a></>}</p>
-        )}
-      </div>
-      <form className="sticky bottom-0 flex items-end gap-2 bg-bg pb-4 pt-2" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-        <textarea ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} rows={1} placeholder="Message Camera Roll Detox…"
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
-          className="min-h-11 flex-1 resize-none rounded-[var(--radius-sm)] border border-line bg-card px-4 py-3 outline-none focus:border-accent focus:shadow-[var(--focus)]" />
-        {ai.busy ? <button type="button" className="sk-btn sk-btn-quiet" onClick={ai.stop}>Stop</button> : <button type="submit" className="sk-btn" disabled={!input.trim()}>Send</button>}
-      </form>
     </div>
   );
 }
